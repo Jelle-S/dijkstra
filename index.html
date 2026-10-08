@@ -13,11 +13,34 @@
     display: flex;
     flex-direction: column;
     align-items: center;
+    margin: 0;
     padding: 20px;
+    text-align: center;
+  }
+  h1 {
+    font-size: clamp(1.5rem, 6vw, 2rem);
+  }
+  #svgContainer {
+    width: 100%;
+    max-width: 690px;
+    margin-top: 20px;
   }
   svg {
+    display: block;
+    width: 100%;
+    height: auto;
     border: 1px solid black;
-    margin-top: 20px;
+    box-sizing: border-box;
+  }
+  button, input {
+    font-size: 16px; /* 16px stops iOS from zooming in on focus */
+    touch-action: manipulation;
+  }
+  button {
+    padding: 8px 14px;
+  }
+  #size {
+    width: 4em;
   }
   .controls {
     display: flex;
@@ -30,6 +53,7 @@
     font-family: monospace;
     margin-top: 12px;
     min-height: 1.4em;
+    overflow-wrap: anywhere;
   }
   .legend {
     display: flex;
@@ -51,6 +75,14 @@
   }
   .legend .note::before {
     display: none;
+  }
+  @media (max-width: 600px) {
+    body {
+      padding: 16px;
+    }
+    .legend {
+      gap: 8px 12px;
+    }
   }
 </style>
 </head>
@@ -253,6 +285,7 @@ class DijkstraVisualizer {
     d3.select("#svgContainer").selectAll("*").remove();
     const svg = d3.select("#svgContainer")
       .append("svg")
+      .attr("viewBox", `0 0 ${n * cs} ${n * cs}`)
       .attr("width", n * cs)
       .attr("height", n * cs);
 
