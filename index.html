@@ -52,8 +52,7 @@
     margin-bottom: 4px;
   }
   #queue .popped {
-    background: #3b82f6;
-    color: white;
+    background: #22c55e;
     padding: 2px 4px;
   }
   #queue table {
@@ -184,6 +183,7 @@
 <div class="legend">
   <span style="--c:black">Wall</span>
   <span style="--c:#4a3b1f">Mud (cost 5)</span>
+  <span style="--c:#22c55e">Being processed</span>
   <span style="--c:#3b82f6">Route being calculated</span>
   <span class="queue-key" style="--c:#bfdbfe">In queue</span>
   <span style="--c:red">Shortest path</span>
@@ -372,7 +372,7 @@ class DijkstraVisualizer {
   initGrid() {
     const n = this.n, cs = this.cellSize;
     this.cells = Array.from({ length: n * n }, (_, i) => ({ i, row: Math.floor(i / n), col: i % n }));
-    this.state = new Array(n * n).fill("empty"); // empty | route | path | alt
+    this.state = new Array(n * n).fill("empty"); // empty | current | route | path | alt
     this.queued = new Map();
     this.renderQueue();
     this.updateButtons();
@@ -405,6 +405,7 @@ class DijkstraVisualizer {
     switch (this.state[i]) {
       case "path": return mud ? "#8b0000" : "red";
       case "alt": return mud ? "#b45309" : "orange";
+      case "current": return mud ? "#15803d" : "#22c55e";
       case "route": return mud ? "#1e3a8a" : "#3b82f6";
       default:
         if (showQueue && this.queued.has(i)) return mud ? "#6b8fc4" : "#bfdbfe";
@@ -505,6 +506,7 @@ class DijkstraVisualizer {
     run.route = [];
     for (let at = current.i; at !== -1; at = run.prev[at]) run.route.push(at);
     for (const i of run.route) this.state[i] = "route";
+    this.state[current.i] = "current";
     this.paint([...changed, ...run.route, ...queueChanged]);
     this.renderQueue(current, fresh, finished);
     document.getElementById("stats").textContent = `Settled: ${run.pos}   |   Current distance: ${current.d}`;
