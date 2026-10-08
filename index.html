@@ -33,7 +33,7 @@
     max-width: 690px;
   }
   #queue {
-    flex: 0 0 220px;
+    flex: 0 0 270px;
     position: relative;
     border: 1px solid black;
     font-family: monospace;
@@ -56,15 +56,23 @@
     color: white;
     padding: 2px 4px;
   }
-  #queue ol {
-    list-style: none;
+  #queue table {
+    width: 100%;
     margin: 4px 0;
-    padding: 0;
+    border-collapse: collapse;
   }
-  #queue li {
+  #queue th {
+    position: sticky;
+    top: -8px; /* stick to the panel edge, not inside its padding */
+    background: white;
+    border-bottom: 1px solid black;
+    text-align: left;
+  }
+  #queue th, #queue td {
     padding: 1px 4px;
+    white-space: nowrap;
   }
-  #queue li.fresh {
+  #queue tr.fresh {
     background: #bfdbfe;
   }
   #queue .mud {
@@ -419,16 +427,18 @@ class DijkstraVisualizer {
       return;
     }
     const n = this.n, limit = 50;
-    const cell = i => `(${Math.floor(i / n)},${i % n})` + (this.cost[i] > 1 ? ' <span class="mud">mud</span>' : "");
+    const cell = i => `(${Math.floor(i / n)},${i % n})`;
+    const cost = i => this.cost[i] > 1 ? `<span class="mud">${this.cost[i]} mud</span>` : this.cost[i];
     const sorted = [...this.queued].sort((a, b) => a[1].d - b[1].d || a[1].seq - b[1].seq);
     const rows = sorted.slice(0, limit).map(([i, e]) => {
       const was = fresh.has(i) && e.old !== Infinity ? ` (was ${e.old})` : "";
-      return `<li class="${fresh.has(i) ? "fresh" : ""}"><b>${e.d}</b>${was} ${cell(i)}</li>`;
+      return `<tr class="${fresh.has(i) ? "fresh" : ""}"><td><b>${e.d}</b>${was}</td><td>${cell(i)}</td><td>${cost(i)}</td></tr>`;
     });
     el.innerHTML =
       `<div class="qhead">Queue (${this.queued.size})</div>` +
       `<div class="popped">${finished ? "Reached the end" : "Popped"}: <b>${popped.d}</b> ${cell(popped.i)}</div>` +
-      `<ol>${rows.join("")}</ol>` +
+      `<table><thead><tr><th>Distance</th><th>Cell (row,col)</th><th>Cost</th></tr></thead>` +
+      `<tbody>${rows.join("")}</tbody></table>` +
       (sorted.length > limit ? `<div class="hint">… ${sorted.length - limit} more</div>` : "");
   }
 
