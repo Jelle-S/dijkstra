@@ -73,7 +73,16 @@
     white-space: nowrap;
   }
   #queue tr.fresh {
-    background: #bfdbfe;
+    background: #fef08a;
+  }
+  #queue .key::before {
+    content: "";
+    display: inline-block;
+    width: 10px;
+    height: 10px;
+    margin-right: 6px;
+    border: 1px solid black;
+    background: #fef08a;
   }
   #queue .mud {
     color: #4a3b1f;
@@ -442,6 +451,7 @@ class DijkstraVisualizer {
       `<div class="popped">${finished ? "Reached the end" : "Popped"}: <b>${popped.d}</b> ${cell(popped.i)}</div>` +
       `<table><thead><tr><th>Distance</th><th>Cell (row,col)</th><th>Cost</th></tr></thead>` +
       `<tbody>${rows.join("")}</tbody></table>` +
+      (fresh.size ? '<div class="hint key">Added to the queue this step</div>' : "") +
       (sorted.length > limit ? `<div class="hint">… ${sorted.length - limit} more</div>` : "");
   }
 
