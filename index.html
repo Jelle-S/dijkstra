@@ -20,10 +20,58 @@
   h1 {
     font-size: clamp(1.5rem, 6vw, 2rem);
   }
-  #svgContainer {
+  .board {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 16px;
     width: 100%;
-    max-width: 690px;
     margin-top: 20px;
+  }
+  #svgContainer {
+    flex: 1 1 320px;
+    max-width: 690px;
+  }
+  #queue {
+    flex: 0 0 220px;
+    position: relative;
+    border: 1px solid black;
+    font-family: monospace;
+    font-size: 13px;
+    text-align: left;
+  }
+  /* Absolutely positioned so the list scrolls within the maze's height */
+  #queue .inner {
+    position: absolute;
+    inset: 0;
+    overflow: auto;
+    padding: 8px;
+  }
+  #queue .qhead {
+    font-weight: bold;
+    margin-bottom: 4px;
+  }
+  #queue .popped {
+    background: #3b82f6;
+    color: white;
+    padding: 2px 4px;
+  }
+  #queue ol {
+    list-style: none;
+    margin: 4px 0;
+    padding: 0;
+  }
+  #queue li {
+    padding: 1px 4px;
+  }
+  #queue li.fresh {
+    background: #bfdbfe;
+  }
+  #queue .mud {
+    color: #4a3b1f;
+  }
+  #queue .hint {
+    color: #666;
   }
   svg {
     display: block;
@@ -83,6 +131,13 @@
     .legend {
       gap: 8px 12px;
     }
+    #queue {
+      flex: 1 1 100%;
+    }
+    #queue .inner {
+      position: static;
+      max-height: 240px;
+    }
   }
 </style>
 </head>
@@ -104,15 +159,22 @@
   <span style="--c:black">Wall</span>
   <span style="--c:#4a3b1f">Mud (cost 5)</span>
   <span style="--c:#3b82f6">Route being calculated</span>
+  <span style="--c:#bfdbfe">In queue</span>
   <span style="--c:red">Shortest path</span>
   <span style="--c:orange">Alternative route</span>
   <span class="note">Darker shade: through mud</span>
 </div>
 
-<div id="svgContainer"></div>
+<div class="board">
+  <div id="svgContainer"></div>
+  <div id="queue"><div class="inner"></div></div>
+</div>
 
 <script>
-// Minimal binary min-heap of [priority, value]
+// Minimal binary min-heap of [priority, seq, value]. Ties on priority are
+// broken by seq (insertion order), so the pop order is fully predictable.
+const less = (x, y) => x[0] < y[0] || (x[0] === y[0] && x[1] < y[1]);
+
 class MinHeap {
   constructor() { this.a = []; }
   get size() { return this.a.length; }
@@ -122,7 +184,7 @@ class MinHeap {
     let i = a.length - 1;
     while (i > 0) {
       const p = (i - 1) >> 1;
-      if (a[p][0] <= a[i][0]) break;
+      if (!less(a[i], a[p])) break;
       [a[p], a[i]] = [a[i], a[p]];
       i = p;
     }
@@ -137,8 +199,8 @@ class MinHeap {
       for (;;) {
         const l = 2 * i + 1, r = l + 1;
         let m = i;
-        if (l < a.length && a[l][0] < a[m][0]) m = l;
-        if (r < a.length && a[r][0] < a[m][0]) m = r;
+        if (l < a.length && less(a[l], a[m])) m = l;
+        if (r < a.length && less(a[r], a[m])) m = r;
         if (m === i) break;
         [a[m], a[i]] = [a[i], a[m]];
         i = m;
@@ -243,26 +305,30 @@ class DijkstraVisualizer {
     const done = new Uint8Array(size);
     const events = [];
     const heap = new MinHeap();
+    let seq = 0;
 
     dist[this.start] = 0;
     ways[this.start] = 1;
-    heap.push([0, this.start]);
+    heap.push([0, seq++, this.start]);
 
     while (heap.size > 0) {
-      const [d, u] = heap.pop();
+      const [d, , u] = heap.pop();
       if (done[u]) continue;
       done[u] = 1;
-      if (record) events.push({ i: u, d, p: prev[u] });
+      // Each event is one pop plus the inserts / decrease-keys that follow it
+      const event = { i: u, d, p: prev[u], pushes: [] };
+      if (record) events.push(event);
       if (u === this.end) break;
 
       for (const v of this.neighbors(u)) {
         if (done[v]) continue;
         const nd = d + this.cost[v] + (extraCost ? extraCost[v] : 0);
         if (nd < dist[v]) {
+          event.pushes.push({ i: v, d: nd, seq, old: dist[v] });
           dist[v] = nd;
           prev[v] = u;
           ways[v] = ways[u];
-          heap.push([nd, v]);
+          heap.push([nd, seq++, v]);
         } else if (nd === dist[v]) {
           ways[v] += ways[u];
         }
@@ -281,6 +347,8 @@ class DijkstraVisualizer {
     const n = this.n, cs = this.cellSize;
     this.cells = Array.from({ length: n * n }, (_, i) => ({ i, row: Math.floor(i / n), col: i % n }));
     this.state = new Array(n * n).fill("empty"); // empty | route | path | alt
+    this.queued = new Map();
+    this.renderQueue();
 
     d3.select("#svgContainer").selectAll("*").remove();
     const svg = d3.select("#svgContainer")
@@ -311,7 +379,9 @@ class DijkstraVisualizer {
       case "path": return mud ? "#8b0000" : "red";
       case "alt": return mud ? "#b45309" : "orange";
       case "route": return mud ? "#1e3a8a" : "#3b82f6";
-      default: return mud ? "#4a3b1f" : "white";
+      default:
+        if (this.queued.has(i)) return mud ? "#6b8fc4" : "#bfdbfe";
+        return mud ? "#4a3b1f" : "white";
     }
   }
 
@@ -329,8 +399,32 @@ class DijkstraVisualizer {
   reset() {
     this.runId++;
     this.state.fill("empty");
+    this.queued = new Map();
     this.paintAll();
+    this.renderQueue();
     document.getElementById("stats").textContent = "";
+  }
+
+  // Lists the priority queue as in the textbook algorithm: one entry per cell
+  // with its current tentative distance, sorted by (distance, insertion order).
+  renderQueue(popped = null, fresh = new Set(), finished = false) {
+    const el = document.querySelector("#queue .inner");
+    if (!popped) {
+      el.innerHTML = '<div class="qhead">Queue</div><div class="hint">Press "Start Dijkstra"</div>';
+      return;
+    }
+    const n = this.n, limit = 50;
+    const cell = i => `(${Math.floor(i / n)},${i % n})` + (this.cost[i] > 1 ? ' <span class="mud">mud</span>' : "");
+    const sorted = [...this.queued].sort((a, b) => a[1].d - b[1].d || a[1].seq - b[1].seq);
+    const rows = sorted.slice(0, limit).map(([i, e]) => {
+      const was = fresh.has(i) && e.old !== Infinity ? ` (was ${e.old})` : "";
+      return `<li class="${fresh.has(i) ? "fresh" : ""}"><b>${e.d}</b>${was} ${cell(i)}</li>`;
+    });
+    el.innerHTML =
+      `<div class="qhead">Queue (${this.queued.size})</div>` +
+      `<div class="popped">${finished ? "Reached the end" : "Popped"}: <b>${popped.d}</b> ${cell(popped.i)}</div>` +
+      `<ol>${rows.join("")}</ol>` +
+      (sorted.length > limit ? `<div class="hint">… ${sorted.length - limit} more</div>` : "");
   }
 
   play() {
@@ -350,12 +444,22 @@ class DijkstraVisualizer {
     const prev = new Int32Array(this.n * this.n).fill(-1);
     let pos = 0, route = [];
     const statsEl = document.getElementById("stats");
+    this.queued = new Map([[this.start, { d: 0, seq: 0, old: Infinity }]]);
 
     const step = () => {
       if (myRun !== this.runId) return;
       const perTick = +document.getElementById("speed").value;
+      const queueChanged = [], fresh = new Set();
       for (let k = 0; k < perTick && pos < events.length; k++, pos++) {
-        prev[events[pos].i] = events[pos].p;
+        const e = events[pos];
+        prev[e.i] = e.p;
+        this.queued.delete(e.i);
+        queueChanged.push(e.i);
+        for (const q of e.pushes) {
+          this.queued.set(q.i, { d: q.d, seq: q.seq, old: q.old });
+          fresh.add(q.i);
+          queueChanged.push(q.i);
+        }
       }
       const current = events[pos - 1];
 
@@ -365,15 +469,19 @@ class DijkstraVisualizer {
       route = [];
       for (let at = current.i; at !== -1; at = prev[at]) route.push(at);
       for (const i of route) this.state[i] = "route";
-      this.paint([...changed, ...route]);
+      this.paint([...changed, ...route, ...queueChanged]);
+      this.renderQueue(current, fresh, pos === events.length);
       statsEl.textContent = `Settled: ${pos}   |   Current distance: ${current.d}`;
 
       if (pos < events.length) {
         // Low speeds also get a longer delay: 250ms per step at 1, 10ms from 5 up
         setTimeout(step, Math.max(10, 250 / perTick ** 2));
       } else {
+        // Clear the queue tint so the final paths stand out; the list stays
+        const left = [...this.queued.keys()];
+        this.queued = new Map();
         for (const i of route) this.state[i] = "empty";
-        this.paint(route);
+        this.paint([...route, ...left]);
         this.revealPath(main, alt, myRun);
       }
     };
