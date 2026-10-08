@@ -174,6 +174,7 @@
   <label>Grid size <input type="number" id="size" min="5" max="60" value="10"></label>
   <button id="newButton">New maze</button>
   <button id="startButton">Start Dijkstra</button>
+  <button id="stepButton">Step</button>
   <label>Speed <input type="range" id="speed" min="1" max="60" value="1"></label>
   <label><input type="checkbox" id="showQueue" checked> Show queue</label>
 </div>
@@ -374,6 +375,7 @@ class DijkstraVisualizer {
     this.state = new Array(n * n).fill("empty"); // empty | route | path | alt
     this.queued = new Map();
     this.renderQueue();
+    this.updateButtons();
 
     d3.select("#svgContainer").selectAll("*").remove();
     const svg = d3.select("#svgContainer")
@@ -423,6 +425,9 @@ class DijkstraVisualizer {
 
   reset() {
     this.runId++;
+    if (this.run) clearTimeout(this.run.timer);
+    this.run = null;
+    this.updateButtons();
     this.state.fill("empty");
     this.queued = new Map();
     this.paintAll();
@@ -455,10 +460,9 @@ class DijkstraVisualizer {
       (sorted.length > limit ? `<div class="hint">… ${sorted.length - limit} more</div>` : "");
   }
 
-  play() {
+  // Sets up a new run; play(), pause() and stepOnce() then drive the animation
+  startRun() {
     this.reset();
-    const myRun = this.runId;
-
     const main = this.dijkstra(null, true);
 
     // Alternative route: same maze, but heavily discourage reusing the shortest path
@@ -468,52 +472,87 @@ class DijkstraVisualizer {
     penalty[this.end] = 0;
     const alt = this.dijkstra(penalty, false);
 
-    const events = main.events;
-    const prev = new Int32Array(this.n * this.n).fill(-1);
-    let pos = 0, route = [];
-    const statsEl = document.getElementById("stats");
-    this.queued = new Map([[this.start, { d: 0, seq: 0, old: Infinity }]]);
-
-    const step = () => {
-      if (myRun !== this.runId) return;
-      const perTick = +document.getElementById("speed").value;
-      const queueChanged = [], fresh = new Set();
-      for (let k = 0; k < perTick && pos < events.length; k++, pos++) {
-        const e = events[pos];
-        prev[e.i] = e.p;
-        this.queued.delete(e.i);
-        queueChanged.push(e.i);
-        for (const q of e.pushes) {
-          this.queued.set(q.i, { d: q.d, seq: q.seq, old: q.old });
-          fresh.add(q.i);
-          queueChanged.push(q.i);
-        }
-      }
-      const current = events[pos - 1];
-
-      // Only show the route from the start to the node settled in this step
-      const changed = route;
-      for (const i of route) this.state[i] = "empty";
-      route = [];
-      for (let at = current.i; at !== -1; at = prev[at]) route.push(at);
-      for (const i of route) this.state[i] = "route";
-      this.paint([...changed, ...route, ...queueChanged]);
-      this.renderQueue(current, fresh, pos === events.length);
-      statsEl.textContent = `Settled: ${pos}   |   Current distance: ${current.d}`;
-
-      if (pos < events.length) {
-        // Low speeds also get a longer delay: 1s per step at 1, halving per notch, 10ms from 8 up
-        setTimeout(step, Math.max(10, 1000 / 2 ** (perTick - 1)));
-      } else {
-        // Clear the queue tint so the final paths stand out; the list stays
-        const left = [...this.queued.keys()];
-        this.queued = new Map();
-        for (const i of route) this.state[i] = "empty";
-        this.paint([...route, ...left]);
-        this.revealPath(main, alt, myRun);
-      }
+    this.run = {
+      id: this.runId, main, alt,
+      prev: new Int32Array(this.n * this.n).fill(-1),
+      pos: 0, route: [], playing: false, timer: null
     };
-    step();
+    this.queued = new Map([[this.start, { d: 0, seq: 0, old: Infinity }]]);
+    this.updateButtons();
+  }
+
+  // Pops `count` cells from the queue and redraws
+  advance(count) {
+    const run = this.run, events = run.main.events;
+    const queueChanged = [], fresh = new Set();
+    for (let k = 0; k < count && run.pos < events.length; k++, run.pos++) {
+      const e = events[run.pos];
+      run.prev[e.i] = e.p;
+      this.queued.delete(e.i);
+      queueChanged.push(e.i);
+      for (const q of e.pushes) {
+        this.queued.set(q.i, { d: q.d, seq: q.seq, old: q.old });
+        fresh.add(q.i);
+        queueChanged.push(q.i);
+      }
+    }
+    const current = events[run.pos - 1];
+    const finished = run.pos === events.length;
+
+    // Only show the route from the start to the node settled in this step
+    const changed = run.route;
+    for (const i of run.route) this.state[i] = "empty";
+    run.route = [];
+    for (let at = current.i; at !== -1; at = run.prev[at]) run.route.push(at);
+    for (const i of run.route) this.state[i] = "route";
+    this.paint([...changed, ...run.route, ...queueChanged]);
+    this.renderQueue(current, fresh, finished);
+    document.getElementById("stats").textContent = `Settled: ${run.pos}   |   Current distance: ${current.d}`;
+
+    if (finished) {
+      // Clear the queue tint so the final paths stand out; the list stays
+      const left = [...this.queued.keys()];
+      this.queued = new Map();
+      for (const i of run.route) this.state[i] = "empty";
+      this.paint([...run.route, ...left]);
+      this.run = null;
+      this.updateButtons();
+      this.revealPath(run.main, run.alt, run.id);
+    }
+  }
+
+  play() {
+    if (!this.run) this.startRun();
+    const run = this.run;
+    run.playing = true;
+    const tick = () => {
+      if (this.run !== run || !run.playing || run.id !== this.runId) return;
+      const perTick = +document.getElementById("speed").value;
+      this.advance(perTick);
+      // Low speeds also get a longer delay: 1s per step at 1, halving per notch, 10ms from 8 up
+      if (this.run === run) run.timer = setTimeout(tick, Math.max(10, 1000 / 2 ** (perTick - 1)));
+    };
+    this.updateButtons();
+    tick();
+  }
+
+  pause() {
+    if (!this.run) return;
+    this.run.playing = false;
+    clearTimeout(this.run.timer);
+    this.updateButtons();
+  }
+
+  // Frame by frame: pop exactly one cell, pausing any running animation
+  stepOnce() {
+    if (this.run) this.pause();
+    else this.startRun();
+    this.advance(1);
+  }
+
+  updateButtons() {
+    document.getElementById("startButton").textContent =
+      this.run?.playing ? "Pause" : this.run ? "Resume" : "Start Dijkstra";
   }
 
   revealPath(main, alt, myRun) {
@@ -574,7 +613,11 @@ document.getElementById("showQueue").addEventListener("change", e => {
   document.body.classList.toggle("hide-queue", !showQueue);
   visualizer.paintAll();
 });
-document.getElementById("startButton").addEventListener("click", () => visualizer.play());
+document.getElementById("startButton").addEventListener("click", () => {
+  if (visualizer.run?.playing) visualizer.pause();
+  else visualizer.play();
+});
+document.getElementById("stepButton").addEventListener("click", () => visualizer.stepOnce());
 
 newMaze();
 </script>
