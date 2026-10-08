@@ -384,7 +384,7 @@ function newMaze() {
   const input = document.getElementById("size");
   const size = Math.min(+input.max, Math.max(+input.min, Math.round(+input.value) || 10));
   input.value = size;
-  // Keep the board around 688px wide (43 cells of 16px for the default 21x21 maze)
+  // Keep the board around 688px wide, whatever the grid size
   const cellSize = Math.max(4, Math.floor(688 / (size * 2 + 1)));
   visualizer = new DijkstraVisualizer(size, cellSize);
   visualizer.initGrid();
