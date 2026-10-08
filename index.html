@@ -49,6 +49,9 @@
     border: 1px solid black;
     background: var(--c);
   }
+  .legend .note::before {
+    display: none;
+  }
 </style>
 </head>
 <body>
@@ -71,6 +74,7 @@
   <span style="--c:#3b82f6">Route being calculated</span>
   <span style="--c:red">Shortest path</span>
   <span style="--c:orange">Alternative route</span>
+  <span class="note">Darker shade: through mud</span>
 </div>
 
 <div id="svgContainer"></div>
@@ -271,9 +275,9 @@ class DijkstraVisualizer {
     if (this.wall[i]) return "black";
     const mud = this.cost[i] > 1;
     switch (this.state[i]) {
-      case "path": return "red";
-      case "alt": return "orange";
-      case "route": return "#3b82f6";
+      case "path": return mud ? "#8b0000" : "red";
+      case "alt": return mud ? "#b45309" : "orange";
+      case "route": return mud ? "#1e3a8a" : "#3b82f6";
       default: return mud ? "#4a3b1f" : "white";
     }
   }
