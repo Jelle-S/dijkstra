@@ -57,7 +57,7 @@
 <p>A maze with loops (so more than one route exists) and "mud" cells that cost 5 instead of 1.</p>
 
 <div class="controls">
-  <label>Grid size <input type="number" id="size" min="5" max="60" value="21"></label>
+  <label>Grid size <input type="number" id="size" min="5" max="60" value="10"></label>
   <button id="newButton">New maze</button>
   <button id="startButton">Start Dijkstra</button>
   <label>Speed <input type="range" id="speed" min="1" max="60" value="8"></label>
@@ -382,7 +382,7 @@ let visualizer = null;
 function newMaze() {
   if (visualizer) visualizer.runId++;
   const input = document.getElementById("size");
-  const size = Math.min(+input.max, Math.max(+input.min, Math.round(+input.value) || 21));
+  const size = Math.min(+input.max, Math.max(+input.min, Math.round(+input.value) || 10));
   input.value = size;
   // Keep the board around 688px wide (43 cells of 16px for the default 21x21 maze)
   const cellSize = Math.max(4, Math.floor(688 / (size * 2 + 1)));
