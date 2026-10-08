@@ -385,8 +385,8 @@ class DijkstraVisualizer {
     const mainSet = new Set(main.path);
     const altOnly = alt.path.filter(i => !mainSet.has(i));
     const sequence = [
-      ...alt.path.filter(i => !mainSet.has(i)).map(i => ["alt", i]),
-      ...main.path.map(i => ["path", i])
+      ...main.path.map(i => ["path", i]),
+      ...altOnly.map(i => ["alt", i])
     ];
     let k = 0;
 
