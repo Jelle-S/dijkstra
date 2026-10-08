@@ -161,8 +161,8 @@ class DijkstraVisualizer {
       const j = Math.floor(Math.random() * (i + 1));
       [candidates[i], candidates[j]] = [candidates[j], candidates[i]];
     }
-    this.loopsAdded = Math.floor(this.mazeCells * this.mazeCells * 0.12);
-    for (let i = 0; i < this.loopsAdded && i < candidates.length; i++) wall[candidates[i]] = 0;
+    const loops = Math.floor(this.mazeCells * this.mazeCells * 0.12);
+    for (let i = 0; i < loops && i < candidates.length; i++) wall[candidates[i]] = 0;
 
     // Mud patches: stepping on them costs 5 instead of 1
     const cost = new Uint8Array(n * n).fill(1);
@@ -370,7 +370,7 @@ class DijkstraVisualizer {
         const count = main.ways[this.end];
         statsEl.textContent =
           `Shortest cost: ${shortestCost}  |  ${count} route${count === 1 ? "" : "s"} with that cost  |  ` +
-          `alternative route: cost ${altCost} (${altOnly.length} cells differ)  |  loops added: ${this.loopsAdded}`;
+          `alternative route: cost ${altCost} (${altOnly.length} cells differ)`;
       }
     };
     tick();
