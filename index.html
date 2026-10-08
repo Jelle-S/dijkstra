@@ -124,6 +124,10 @@
   .legend .note::before {
     display: none;
   }
+  .hide-queue #queue,
+  .hide-queue .queue-key {
+    display: none;
+  }
   @media (max-width: 600px) {
     body {
       padding: 16px;
@@ -151,6 +155,7 @@
   <button id="newButton">New maze</button>
   <button id="startButton">Start Dijkstra</button>
   <label>Speed <input type="range" id="speed" min="1" max="60" value="1"></label>
+  <label><input type="checkbox" id="showQueue" checked> Show queue</label>
 </div>
 
 <div id="stats"></div>
@@ -159,7 +164,7 @@
   <span style="--c:black">Wall</span>
   <span style="--c:#4a3b1f">Mud (cost 5)</span>
   <span style="--c:#3b82f6">Route being calculated</span>
-  <span style="--c:#bfdbfe">In queue</span>
+  <span class="queue-key" style="--c:#bfdbfe">In queue</span>
   <span style="--c:red">Shortest path</span>
   <span style="--c:orange">Alternative route</span>
   <span class="note">Darker shade: through mud</span>
@@ -380,7 +385,7 @@ class DijkstraVisualizer {
       case "alt": return mud ? "#b45309" : "orange";
       case "route": return mud ? "#1e3a8a" : "#3b82f6";
       default:
-        if (this.queued.has(i)) return mud ? "#6b8fc4" : "#bfdbfe";
+        if (showQueue && this.queued.has(i)) return mud ? "#6b8fc4" : "#bfdbfe";
         return mud ? "#4a3b1f" : "white";
     }
   }
@@ -523,6 +528,9 @@ class DijkstraVisualizer {
 }
 
 let visualizer = null;
+// Read from the checkbox: browsers may restore its state on reload
+let showQueue = document.getElementById("showQueue").checked;
+document.body.classList.toggle("hide-queue", !showQueue);
 
 function newMaze() {
   if (visualizer) visualizer.runId++;
@@ -538,6 +546,11 @@ function newMaze() {
 
 document.getElementById("newButton").addEventListener("click", newMaze);
 document.getElementById("size").addEventListener("change", newMaze);
+document.getElementById("showQueue").addEventListener("change", e => {
+  showQueue = e.target.checked;
+  document.body.classList.toggle("hide-queue", !showQueue);
+  visualizer.paintAll();
+});
 document.getElementById("startButton").addEventListener("click", () => visualizer.play());
 
 newMaze();
